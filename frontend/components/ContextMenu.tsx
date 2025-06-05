@@ -102,7 +102,7 @@ export default function ContextMenu({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/5 backdrop-blur-[1px]" onClick={onClose} />
+      <div className="fixed inset-0 z-40" onClick={onClose} />
       
       {/* Context Menu */}
       <div

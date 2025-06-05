@@ -2,6 +2,8 @@
 
 A modern, self-hostable calendar web application with a unique voting events feature that allows users to vote on preferred times for events.
 
+![voting](screenshot.png)
+
 ## Features
 
 ### Core Calendar Features

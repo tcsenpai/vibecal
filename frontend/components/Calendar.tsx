@@ -192,11 +192,14 @@ export default function Calendar({
           }
         }
         
-        // Handle right-click on empty calendar areas
+        // For empty slots, create a reasonable default time
         const now = new Date()
+        const nextHour = new Date(now.getTime())
+        nextHour.setHours(now.getHours() + 1, 0, 0, 0)
+        
         const slotInfo = {
-          start: new Date(now.getTime() + 60 * 60 * 1000), // Next hour
-          end: new Date(now.getTime() + 2 * 60 * 60 * 1000) // +2 hours
+          start: nextHour,
+          end: new Date(nextHour.getTime() + 60 * 60 * 1000)
         }
         
         handleRightClick(e, slotInfo)
