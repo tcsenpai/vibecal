@@ -1,0 +1,145 @@
+export interface CalendarCollection {
+  id: string;
+  userId: number;
+  name: string;
+  displayName: string;
+  description?: string;
+  color: string;
+  timezone: string;
+  syncToken: string;
+  isDefault: boolean;
+  isPublic: boolean;
+  webdavEnabled: boolean;
+  webcalEnabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CalendarObject {
+  id: string;
+  calendarId: string;
+  eventId?: number;
+  uid: string;
+  etag: string;
+  icalendarData: string;
+  componentType: 'VEVENT' | 'VTODO' | 'VJOURNAL' | 'VFREEBUSY';
+  summary?: string;
+  dtstart?: Date;
+  dtend?: Date;
+  dtstamp: Date;
+  sequence: number;
+  status: 'TENTATIVE' | 'CONFIRMED' | 'CANCELLED';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface WebDAVProperty {
+  id: string;
+  resourcePath: string;
+  namespace: string;
+  name: string;
+  value?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SyncChange {
+  id: string;
+  calendarId: string;
+  objectId?: string;
+  changeType: 'create' | 'update' | 'delete';
+  syncToken: string;
+  resourcePath?: string;
+  etag?: string;
+  createdAt: Date;
+}
+
+export interface WebDAVLock {
+  id: string;
+  resourcePath: string;
+  lockToken: string;
+  lockType: 'write' | 'read';
+  lockScope: 'exclusive' | 'shared';
+  depth: '0' | '1' | 'infinity';
+  ownerInfo?: string;
+  timeoutSeconds: number;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
+export interface CalendarSubscription {
+  id: string;
+  userId: number;
+  name: string;
+  url: string;
+  color: string;
+  refreshInterval: number;
+  lastSync?: Date;
+  syncStatus: 'pending' | 'syncing' | 'success' | 'error';
+  errorMessage?: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CalDAVRequest {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body?: string;
+  user: {
+    id: number;
+    username: string;
+    email: string;
+  };
+}
+
+export interface CalDAVResponse {
+  statusCode: number;
+  headers: Record<string, string>;
+  body?: string;
+}
+
+export interface CalendarQuery {
+  calendarId: string;
+  timeRange?: {
+    start: Date;
+    end: Date;
+  };
+  componentType?: string;
+  filters?: Array<{
+    name: string;
+    value: string;
+    operator?: 'equals' | 'contains' | 'starts-with';
+  }>;
+}
+
+export interface FreeBusyQuery {
+  calendarId: string;
+  timeRange: {
+    start: Date;
+    end: Date;
+  };
+  organizer?: string;
+  attendee?: string;
+}
+
+export interface CalDAVPrivileges {
+  read: boolean;
+  write: boolean;
+  writeProperties: boolean;
+  writeContent: boolean;
+  bind: boolean;
+  unbind: boolean;
+  unlock: boolean;
+  readCurrentUserPrivilegeSet: boolean;
+  readFreeBusy: boolean;
+  scheduleDeliver: boolean;
+  scheduleDeliverInvite: boolean;
+  scheduleDeliverReply: boolean;
+  scheduleQueryFreeBusy: boolean;
+  scheduleSend: boolean;
+  scheduleSendInvite: boolean;
+  scheduleSendReply: boolean;
+  scheduleSendFreeBusy: boolean;
+}

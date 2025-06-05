@@ -1,0 +1,560 @@
+import { Pool } from 'pg';
+import { v4 as uuidv4 } from 'uuid';
+import * as ical from 'ical-generator';
+import { parseICS } from 'node-ical';
+import { RRule } from 'rrule';
+import logger from '../utils/logger';
+import {
+  CalendarCollection,
+  CalendarObject,
+  WebDAVProperty,
+  SyncChange,
+  WebDAVLock,
+  CalendarQuery,
+  FreeBusyQuery
+} from '../types/caldav';
+
+export class CalDAVService {
+  private db: Pool;
+
+  constructor(database: Pool) {
+    this.db = database;
+  }
+
+  // Calendar Collection Operations
+
+  async getCalendars(userId: number): Promise<CalendarCollection[]> {
+    try {
+      const result = await this.db.query(
+        `SELECT * FROM calendars WHERE user_id = $1 ORDER BY is_default DESC, name ASC`,
+        [userId]
+      );
+      return result.rows;
+    } catch (error) {
+      logger.error('Error fetching calendars:', error);
+      throw new Error('Failed to fetch calendars');
+    }
+  }
+
+  async getCalendar(calendarId: string, userId: number): Promise<CalendarCollection | null> {
+    try {
+      const result = await this.db.query(
+        `SELECT * FROM calendars WHERE id = $1 AND user_id = $2`,
+        [calendarId, userId]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      logger.error('Error fetching calendar:', error);
+      throw new Error('Failed to fetch calendar');
+    }
+  }
+
+  async createCalendar(userId: number, data: Partial<CalendarCollection>): Promise<CalendarCollection> {
+    try {
+      const id = uuidv4();
+      const result = await this.db.query(`
+        INSERT INTO calendars (id, user_id, name, display_name, description, color, timezone, is_default, is_public, webdav_enabled, webcal_enabled)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *
+      `, [
+        id,
+        userId,
+        data.name || 'New Calendar',
+        data.displayName || data.name || 'New Calendar',
+        data.description,
+        data.color || '#3B82F6',
+        data.timezone || 'UTC',
+        data.isDefault || false,
+        data.isPublic || false,
+        data.webdavEnabled !== false,
+        data.webcalEnabled !== false
+      ]);
+      
+      return result.rows[0];
+    } catch (error) {
+      logger.error('Error creating calendar:', error);
+      throw new Error('Failed to create calendar');
+    }
+  }
+
+  async updateCalendar(calendarId: string, userId: number, data: Partial<CalendarCollection>): Promise<CalendarCollection> {
+    try {
+      const updates: string[] = [];
+      const values: any[] = [];
+      let paramCount = 1;
+
+      if (data.name !== undefined) {
+        updates.push(`name = $${paramCount++}`);
+        values.push(data.name);
+      }
+      if (data.displayName !== undefined) {
+        updates.push(`display_name = $${paramCount++}`);
+        values.push(data.displayName);
+      }
+      if (data.description !== undefined) {
+        updates.push(`description = $${paramCount++}`);
+        values.push(data.description);
+      }
+      if (data.color !== undefined) {
+        updates.push(`color = $${paramCount++}`);
+        values.push(data.color);
+      }
+      if (data.timezone !== undefined) {
+        updates.push(`timezone = $${paramCount++}`);
+        values.push(data.timezone);
+      }
+
+      if (updates.length === 0) {
+        throw new Error('No fields to update');
+      }
+
+      updates.push(`updated_at = CURRENT_TIMESTAMP`);
+      values.push(calendarId, userId);
+
+      const result = await this.db.query(`
+        UPDATE calendars 
+        SET ${updates.join(', ')}
+        WHERE id = $${paramCount++} AND user_id = $${paramCount++}
+        RETURNING *
+      `, values);
+
+      if (result.rows.length === 0) {
+        throw new Error('Calendar not found or access denied');
+      }
+
+      return result.rows[0];
+    } catch (error) {
+      logger.error('Error updating calendar:', error);
+      throw new Error('Failed to update calendar');
+    }
+  }
+
+  async deleteCalendar(calendarId: string, userId: number): Promise<void> {
+    try {
+      const result = await this.db.query(
+        `DELETE FROM calendars WHERE id = $1 AND user_id = $2 AND is_default = FALSE`,
+        [calendarId, userId]
+      );
+
+      if (result.rowCount === 0) {
+        throw new Error('Calendar not found, access denied, or cannot delete default calendar');
+      }
+    } catch (error) {
+      logger.error('Error deleting calendar:', error);
+      throw new Error('Failed to delete calendar');
+    }
+  }
+
+  // Calendar Object Operations
+
+  async getCalendarObjects(calendarId: string, userId: number): Promise<CalendarObject[]> {
+    try {
+      // Verify user has access to calendar
+      const calendar = await this.getCalendar(calendarId, userId);
+      if (!calendar) {
+        throw new Error('Calendar not found or access denied');
+      }
+
+      const result = await this.db.query(
+        `SELECT * FROM calendar_objects WHERE calendar_id = $1 ORDER BY dtstart ASC`,
+        [calendarId]
+      );
+      return result.rows;
+    } catch (error) {
+      logger.error('Error fetching calendar objects:', error);
+      throw new Error('Failed to fetch calendar objects');
+    }
+  }
+
+  async getCalendarObject(calendarId: string, objectId: string, userId: number): Promise<CalendarObject | null> {
+    try {
+      // Verify user has access to calendar
+      const calendar = await this.getCalendar(calendarId, userId);
+      if (!calendar) {
+        throw new Error('Calendar not found or access denied');
+      }
+
+      const result = await this.db.query(
+        `SELECT * FROM calendar_objects WHERE calendar_id = $1 AND id = $2`,
+        [calendarId, objectId]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      logger.error('Error fetching calendar object:', error);
+      throw new Error('Failed to fetch calendar object');
+    }
+  }
+
+  async createCalendarObject(calendarId: string, userId: number, icalendarData: string): Promise<CalendarObject> {
+    try {
+      // Verify user has access to calendar
+      const calendar = await this.getCalendar(calendarId, userId);
+      if (!calendar) {
+        throw new Error('Calendar not found or access denied');
+      }
+
+      // Parse iCalendar data
+      const parsed = this.parseICalendarData(icalendarData);
+      const objectId = uuidv4();
+
+      const result = await this.db.query(`
+        INSERT INTO calendar_objects (
+          id, calendar_id, uid, etag, icalendar_data, component_type, 
+          summary, dtstart, dtend, sequence, status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *
+      `, [
+        objectId,
+        calendarId,
+        parsed.uid,
+        uuidv4(), // ETag
+        icalendarData,
+        parsed.componentType,
+        parsed.summary,
+        parsed.dtstart,
+        parsed.dtend,
+        parsed.sequence || 0,
+        parsed.status || 'CONFIRMED'
+      ]);
+
+      return result.rows[0];
+    } catch (error) {
+      logger.error('Error creating calendar object:', error);
+      throw new Error('Failed to create calendar object');
+    }
+  }
+
+  async updateCalendarObject(calendarId: string, objectId: string, userId: number, icalendarData: string): Promise<CalendarObject> {
+    try {
+      // Verify user has access to calendar
+      const calendar = await this.getCalendar(calendarId, userId);
+      if (!calendar) {
+        throw new Error('Calendar not found or access denied');
+      }
+
+      // Parse iCalendar data
+      const parsed = this.parseICalendarData(icalendarData);
+
+      const result = await this.db.query(`
+        UPDATE calendar_objects 
+        SET uid = $3, etag = $4, icalendar_data = $5, component_type = $6,
+            summary = $7, dtstart = $8, dtend = $9, sequence = $10, status = $11,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE calendar_id = $1 AND id = $2
+        RETURNING *
+      `, [
+        calendarId,
+        objectId,
+        parsed.uid,
+        uuidv4(), // New ETag
+        icalendarData,
+        parsed.componentType,
+        parsed.summary,
+        parsed.dtstart,
+        parsed.dtend,
+        parsed.sequence || 0,
+        parsed.status || 'CONFIRMED'
+      ]);
+
+      if (result.rows.length === 0) {
+        throw new Error('Calendar object not found');
+      }
+
+      return result.rows[0];
+    } catch (error) {
+      logger.error('Error updating calendar object:', error);
+      throw new Error('Failed to update calendar object');
+    }
+  }
+
+  async deleteCalendarObject(calendarId: string, objectId: string, userId: number): Promise<void> {
+    try {
+      // Verify user has access to calendar
+      const calendar = await this.getCalendar(calendarId, userId);
+      if (!calendar) {
+        throw new Error('Calendar not found or access denied');
+      }
+
+      const result = await this.db.query(
+        `DELETE FROM calendar_objects WHERE calendar_id = $1 AND id = $2`,
+        [calendarId, objectId]
+      );
+
+      if (result.rowCount === 0) {
+        throw new Error('Calendar object not found');
+      }
+    } catch (error) {
+      logger.error('Error deleting calendar object:', error);
+      throw new Error('Failed to delete calendar object');
+    }
+  }
+
+  // Calendar Query Operations
+
+  async queryCalendarObjects(query: CalendarQuery, userId: number): Promise<CalendarObject[]> {
+    try {
+      // Verify user has access to calendar
+      const calendar = await this.getCalendar(query.calendarId, userId);
+      if (!calendar) {
+        throw new Error('Calendar not found or access denied');
+      }
+
+      let sql = `SELECT * FROM calendar_objects WHERE calendar_id = $1`;
+      const params: any[] = [query.calendarId];
+      let paramCount = 2;
+
+      if (query.componentType) {
+        sql += ` AND component_type = $${paramCount++}`;
+        params.push(query.componentType);
+      }
+
+      if (query.timeRange) {
+        sql += ` AND (dtstart < $${paramCount++} AND dtend > $${paramCount++})`;
+        params.push(query.timeRange.end, query.timeRange.start);
+      }
+
+      if (query.filters && query.filters.length > 0) {
+        for (const filter of query.filters) {
+          switch (filter.operator || 'equals') {
+            case 'equals':
+              sql += ` AND ${filter.name} = $${paramCount++}`;
+              params.push(filter.value);
+              break;
+            case 'contains':
+              sql += ` AND ${filter.name} ILIKE $${paramCount++}`;
+              params.push(`%${filter.value}%`);
+              break;
+            case 'starts-with':
+              sql += ` AND ${filter.name} ILIKE $${paramCount++}`;
+              params.push(`${filter.value}%`);
+              break;
+          }
+        }
+      }
+
+      sql += ` ORDER BY dtstart ASC`;
+
+      const result = await this.db.query(sql, params);
+      return result.rows;
+    } catch (error) {
+      logger.error('Error querying calendar objects:', error);
+      throw new Error('Failed to query calendar objects');
+    }
+  }
+
+  // Sync Operations
+
+  async getSyncToken(calendarId: string, userId: number): Promise<string> {
+    try {
+      const calendar = await this.getCalendar(calendarId, userId);
+      if (!calendar) {
+        throw new Error('Calendar not found or access denied');
+      }
+      return calendar.syncToken;
+    } catch (error) {
+      logger.error('Error getting sync token:', error);
+      throw new Error('Failed to get sync token');
+    }
+  }
+
+  async getChangesSince(calendarId: string, syncToken: string, userId: number): Promise<SyncChange[]> {
+    try {
+      // Verify user has access to calendar
+      const calendar = await this.getCalendar(calendarId, userId);
+      if (!calendar) {
+        throw new Error('Calendar not found or access denied');
+      }
+
+      const result = await this.db.query(`
+        SELECT sc.*, co.uid, co.icalendar_data
+        FROM sync_changes sc
+        LEFT JOIN calendar_objects co ON sc.object_id = co.id
+        WHERE sc.calendar_id = $1 
+        AND sc.created_at > (
+          SELECT created_at FROM sync_changes 
+          WHERE sync_token = $2 
+          LIMIT 1
+        )
+        ORDER BY sc.created_at ASC
+      `, [calendarId, syncToken]);
+
+      return result.rows;
+    } catch (error) {
+      logger.error('Error getting changes since sync token:', error);
+      throw new Error('Failed to get changes');
+    }
+  }
+
+  // WebDAV Property Operations
+
+  async getProperty(resourcePath: string, namespace: string, name: string): Promise<WebDAVProperty | null> {
+    try {
+      const result = await this.db.query(
+        `SELECT * FROM webdav_properties WHERE resource_path = $1 AND namespace = $2 AND name = $3`,
+        [resourcePath, namespace, name]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      logger.error('Error getting WebDAV property:', error);
+      throw new Error('Failed to get property');
+    }
+  }
+
+  async setProperty(resourcePath: string, namespace: string, name: string, value?: string): Promise<void> {
+    try {
+      await this.db.query(`
+        INSERT INTO webdav_properties (id, resource_path, namespace, name, value)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (resource_path, namespace, name) 
+        DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+      `, [uuidv4(), resourcePath, namespace, name, value]);
+    } catch (error) {
+      logger.error('Error setting WebDAV property:', error);
+      throw new Error('Failed to set property');
+    }
+  }
+
+  async removeProperty(resourcePath: string, namespace: string, name: string): Promise<void> {
+    try {
+      await this.db.query(
+        `DELETE FROM webdav_properties WHERE resource_path = $1 AND namespace = $2 AND name = $3`,
+        [resourcePath, namespace, name]
+      );
+    } catch (error) {
+      logger.error('Error removing WebDAV property:', error);
+      throw new Error('Failed to remove property');
+    }
+  }
+
+  // iCalendar Utility Methods
+
+  private parseICalendarData(icalendarData: string): any {
+    try {
+      const parsed = parseICS(icalendarData);
+      const events = Object.values(parsed).filter((item: any) => item.type === 'VEVENT');
+      
+      if (events.length === 0) {
+        throw new Error('No VEVENT found in iCalendar data');
+      }
+
+      const event = events[0] as any;
+      
+      return {
+        uid: event.uid || uuidv4(),
+        componentType: 'VEVENT',
+        summary: event.summary,
+        dtstart: event.start ? new Date(event.start) : null,
+        dtend: event.end ? new Date(event.end) : null,
+        sequence: event.sequence || 0,
+        status: event.status || 'CONFIRMED'
+      };
+    } catch (error) {
+      logger.error('Error parsing iCalendar data:', error);
+      throw new Error('Invalid iCalendar data');
+    }
+  }
+
+  async generateICalendarFeed(calendarId: string, userId: number): Promise<string> {
+    try {
+      const calendar = await this.getCalendar(calendarId, userId);
+      if (!calendar) {
+        throw new Error('Calendar not found or access denied');
+      }
+
+      const objects = await this.getCalendarObjects(calendarId, userId);
+      
+      const cal = ical({
+        domain: 'vibecal.local',
+        name: calendar.displayName,
+        description: calendar.description,
+        timezone: calendar.timezone,
+        prodId: {
+          company: 'VibeCal',
+          product: 'VibeCal Calendar',
+          language: 'EN'
+        }
+      });
+
+      for (const obj of objects) {
+        if (obj.componentType === 'VEVENT') {
+          try {
+            cal.createEvent({
+              uid: obj.uid,
+              start: obj.dtstart || new Date(),
+              end: obj.dtend || new Date(),
+              summary: obj.summary || 'No Title',
+              timestamp: obj.dtstamp,
+              sequence: obj.sequence,
+              status: obj.status.toLowerCase() as any
+            });
+          } catch (eventError) {
+            logger.warn('Error adding event to calendar feed:', eventError);
+          }
+        }
+      }
+
+      return cal.toString();
+    } catch (error) {
+      logger.error('Error generating iCalendar feed:', error);
+      throw new Error('Failed to generate calendar feed');
+    }
+  }
+
+  // Lock Management
+
+  async createLock(resourcePath: string, lockType: 'read' | 'write', lockScope: 'shared' | 'exclusive', depth: '0' | '1' | 'infinity', timeoutSeconds: number = 3600, ownerInfo?: string): Promise<WebDAVLock> {
+    try {
+      const lockToken = `opaquelocktoken:${uuidv4()}`;
+      const expiresAt = new Date(Date.now() + timeoutSeconds * 1000);
+
+      const result = await this.db.query(`
+        INSERT INTO webdav_locks (id, resource_path, lock_token, lock_type, lock_scope, depth, owner_info, timeout_seconds, expires_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING *
+      `, [uuidv4(), resourcePath, lockToken, lockType, lockScope, depth, ownerInfo, timeoutSeconds, expiresAt]);
+
+      return result.rows[0];
+    } catch (error) {
+      logger.error('Error creating WebDAV lock:', error);
+      throw new Error('Failed to create lock');
+    }
+  }
+
+  async getLock(lockToken: string): Promise<WebDAVLock | null> {
+    try {
+      const result = await this.db.query(
+        `SELECT * FROM webdav_locks WHERE lock_token = $1 AND expires_at > CURRENT_TIMESTAMP`,
+        [lockToken]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      logger.error('Error getting WebDAV lock:', error);
+      throw new Error('Failed to get lock');
+    }
+  }
+
+  async removeLock(lockToken: string): Promise<void> {
+    try {
+      await this.db.query(
+        `DELETE FROM webdav_locks WHERE lock_token = $1`,
+        [lockToken]
+      );
+    } catch (error) {
+      logger.error('Error removing WebDAV lock:', error);
+      throw new Error('Failed to remove lock');
+    }
+  }
+
+  async cleanupExpiredLocks(): Promise<number> {
+    try {
+      const result = await this.db.query(
+        `DELETE FROM webdav_locks WHERE expires_at < CURRENT_TIMESTAMP`
+      );
+      return result.rowCount || 0;
+    } catch (error) {
+      logger.error('Error cleaning up expired locks:', error);
+      return 0;
+    }
+  }
+}
