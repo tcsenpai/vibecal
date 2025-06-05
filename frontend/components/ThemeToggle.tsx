@@ -1,80 +1,68 @@
 'use client'
 
-import * as React from 'react'
+import { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
-import { SunIcon, MoonIcon, ComputerDesktopIcon } from '@heroicons/react/24/outline'
+import { Sun, Moon, Monitor } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface ThemeToggleProps {
   className?: string
 }
 
-export function ThemeToggle({ className }: ThemeToggleProps) {
-  const { theme, setTheme, themes } = useTheme()
-  const [mounted, setMounted] = React.useState(false)
+export default function ThemeToggle({ className }: ThemeToggleProps) {
+  const [mounted, setMounted] = useState(false)
+  const { theme, setTheme } = useTheme()
 
-  // useEffect only runs on the client, so now we can safely show the UI
-  React.useEffect(() => {
+  useEffect(() => {
     setMounted(true)
   }, [])
 
   if (!mounted) {
     return (
-      <button className={cn('p-2 rounded-md', className)}>
-        <div className="h-5 w-5" />
-      </button>
+      <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-gray-700 animate-pulse" />
     )
   }
 
-  const cycleTheme = () => {
-    const currentIndex = themes.indexOf(theme || 'system')
-    const nextIndex = (currentIndex + 1) % themes.length
-    setTheme(themes[nextIndex])
-  }
-
-  const getIcon = () => {
-    switch (theme) {
-      case 'light':
-        return <SunIcon className="h-5 w-5" />
-      case 'dark':
-        return <MoonIcon className="h-5 w-5" />
-      default:
-        return <ComputerDesktopIcon className="h-5 w-5" />
-    }
-  }
-
-  const getTitle = () => {
-    switch (theme) {
-      case 'light':
-        return 'Switch to dark mode'
-      case 'dark':
-        return 'Switch to system theme'
-      default:
-        return 'Switch to light mode'
-    }
-  }
+  const themes = [
+    { value: 'light', icon: Sun, label: 'Light' },
+    { value: 'dark', icon: Moon, label: 'Dark' },
+    { value: 'system', icon: Monitor, label: 'System' }
+  ]
 
   return (
-    <button
-      onClick={cycleTheme}
-      title={getTitle()}
-      className={cn(
-        'p-2 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100',
-        className
-      )}
-    >
-      {getIcon()}
-    </button>
+    <div className="relative">
+      <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-xl p-1 transition-all duration-200">
+        {themes.map(({ value, icon: Icon, label }) => (
+          <button
+            key={value}
+            onClick={() => setTheme(value)}
+            className={`
+              relative flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-200 transform hover:scale-105
+              ${theme === value 
+                ? 'bg-white dark:bg-gray-700 shadow-soft text-primary-600 dark:text-primary-400' 
+                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-700/50'
+              }
+            `}
+            title={label}
+          >
+            <Icon className="w-5 h-5" />
+            {theme === value && (
+              <div className="absolute inset-0 rounded-lg ring-2 ring-primary-400/50 animate-pulse" />
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 
 // Dropdown version for more control
 export function ThemeDropdown({ className }: ThemeToggleProps) {
   const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = React.useState(false)
-  const [isOpen, setIsOpen] = React.useState(false)
+  const [mounted, setMounted] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
 
-  React.useEffect(() => {
+  useEffect(() => {
     setMounted(true)
   }, [])
 
@@ -89,9 +77,9 @@ export function ThemeDropdown({ className }: ThemeToggleProps) {
   }
 
   const themes = [
-    { value: 'light', label: 'Light', icon: SunIcon },
-    { value: 'dark', label: 'Dark', icon: MoonIcon },
-    { value: 'system', label: 'System', icon: ComputerDesktopIcon },
+    { value: 'light', label: 'Light', icon: Sun },
+    { value: 'dark', label: 'Dark', icon: Moon },
+    { value: 'system', label: 'System', icon: Monitor },
   ]
 
   const currentTheme = themes.find(t => t.value === theme) || themes[2]

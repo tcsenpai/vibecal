@@ -5,7 +5,7 @@ export interface CalendarCollection {
   displayName: string;
   description?: string;
   color: string;
-  timezone: string;
+  timezone: string; 
   syncToken: string;
   isDefault: boolean;
   isPublic: boolean;
@@ -22,13 +22,13 @@ export interface CalendarObject {
   uid: string;
   etag: string;
   icalendarData: string;
-  componentType: 'VEVENT' | 'VTODO' | 'VJOURNAL' | 'VFREEBUSY';
+  componentType: "VEVENT" | "VTODO" | "VJOURNAL" | "VFREEBUSY";
   summary?: string;
   dtstart?: Date;
   dtend?: Date;
   dtstamp: Date;
   sequence: number;
-  status: 'TENTATIVE' | 'CONFIRMED' | 'CANCELLED';
+  status: "TENTATIVE" | "CONFIRMED" | "CANCELLED";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,7 +47,7 @@ export interface SyncChange {
   id: string;
   calendarId: string;
   objectId?: string;
-  changeType: 'create' | 'update' | 'delete';
+  changeType: "create" | "update" | "delete";
   syncToken: string;
   resourcePath?: string;
   etag?: string;
@@ -58,9 +58,9 @@ export interface WebDAVLock {
   id: string;
   resourcePath: string;
   lockToken: string;
-  lockType: 'write' | 'read';
-  lockScope: 'exclusive' | 'shared';
-  depth: '0' | '1' | 'infinity';
+  lockType: "write" | "read";
+  lockScope: "exclusive" | "shared";
+  depth: "0" | "1" | "infinity";
   ownerInfo?: string;
   timeoutSeconds: number;
   createdAt: Date;
@@ -75,7 +75,7 @@ export interface CalendarSubscription {
   color: string;
   refreshInterval: number;
   lastSync?: Date;
-  syncStatus: 'pending' | 'syncing' | 'success' | 'error';
+  syncStatus: "pending" | "syncing" | "success" | "error";
   errorMessage?: string;
   isActive: boolean;
   createdAt: Date;
@@ -110,7 +110,7 @@ export interface CalendarQuery {
   filters?: Array<{
     name: string;
     value: string;
-    operator?: 'equals' | 'contains' | 'starts-with';
+    operator?: "equals" | "contains" | "starts-with";
   }>;
 }
 

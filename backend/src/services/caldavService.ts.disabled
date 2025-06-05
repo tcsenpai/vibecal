@@ -1,9 +1,9 @@
-import { Pool } from 'pg';
-import { v4 as uuidv4 } from 'uuid';
-import * as ical from 'ical-generator';
-import { parseICS } from 'node-ical';
-import { RRule } from 'rrule';
-import logger from '../utils/logger';
+import { Pool } from "pg";
+import { v4 as uuidv4 } from "uuid";
+import ical from "ical-generator";
+import { parse } from "ical.js";
+import { RRule } from "rrule";
+import { logger } from "../utils/logger";
 import {
   CalendarCollection,
   CalendarObject,
@@ -11,8 +11,8 @@ import {
   SyncChange,
   WebDAVLock,
   CalendarQuery,
-  FreeBusyQuery
-} from '../types/caldav';
+  FreeBusyQuery,
+} from "../types/caldav";
 
 export class CalDAVService {
   private db: Pool;
@@ -31,12 +31,15 @@ export class CalDAVService {
       );
       return result.rows;
     } catch (error) {
-      logger.error('Error fetching calendars:', error);
-      throw new Error('Failed to fetch calendars');
+      logger.error("Error fetching calendars:", error);
+      throw new Error("Failed to fetch calendars");
     }
   }
 
-  async getCalendar(calendarId: string, userId: number): Promise<CalendarCollection | null> {
+  async getCalendar(
+    calendarId: string,
+    userId: number
+  ): Promise<CalendarCollection | null> {
     try {
       const result = await this.db.query(
         `SELECT * FROM calendars WHERE id = $1 AND user_id = $2`,
@@ -44,40 +47,50 @@ export class CalDAVService {
       );
       return result.rows[0] || null;
     } catch (error) {
-      logger.error('Error fetching calendar:', error);
-      throw new Error('Failed to fetch calendar');
+      logger.error("Error fetching calendar:", error);
+      throw new Error("Failed to fetch calendar");
     }
   }
 
-  async createCalendar(userId: number, data: Partial<CalendarCollection>): Promise<CalendarCollection> {
+  async createCalendar(
+    userId: number,
+    data: Partial<CalendarCollection>
+  ): Promise<CalendarCollection> {
     try {
       const id = uuidv4();
-      const result = await this.db.query(`
+      const result = await this.db.query(
+        `
         INSERT INTO calendars (id, user_id, name, display_name, description, color, timezone, is_default, is_public, webdav_enabled, webcal_enabled)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
-      `, [
-        id,
-        userId,
-        data.name || 'New Calendar',
-        data.displayName || data.name || 'New Calendar',
-        data.description,
-        data.color || '#3B82F6',
-        data.timezone || 'UTC',
-        data.isDefault || false,
-        data.isPublic || false,
-        data.webdavEnabled !== false,
-        data.webcalEnabled !== false
-      ]);
-      
+      `,
+        [
+          id,
+          userId,
+          data.name || "New Calendar",
+          data.displayName || data.name || "New Calendar",
+          data.description,
+          data.color || "#3B82F6",
+          data.timezone || "UTC",
+          data.isDefault || false,
+          data.isPublic || false,
+          data.webdavEnabled !== false,
+          data.webcalEnabled !== false,
+        ]
+      );
+
       return result.rows[0];
     } catch (error) {
-      logger.error('Error creating calendar:', error);
-      throw new Error('Failed to create calendar');
+      logger.error("Error creating calendar:", error);
+      throw new Error("Failed to create calendar");
     }
   }
 
-  async updateCalendar(calendarId: string, userId: number, data: Partial<CalendarCollection>): Promise<CalendarCollection> {
+  async updateCalendar(
+    calendarId: string,
+    userId: number,
+    data: Partial<CalendarCollection>
+  ): Promise<CalendarCollection> {
     try {
       const updates: string[] = [];
       const values: any[] = [];
@@ -105,27 +118,30 @@ export class CalDAVService {
       }
 
       if (updates.length === 0) {
-        throw new Error('No fields to update');
+        throw new Error("No fields to update");
       }
 
       updates.push(`updated_at = CURRENT_TIMESTAMP`);
       values.push(calendarId, userId);
 
-      const result = await this.db.query(`
+      const result = await this.db.query(
+        `
         UPDATE calendars 
-        SET ${updates.join(', ')}
+        SET ${updates.join(", ")}
         WHERE id = $${paramCount++} AND user_id = $${paramCount++}
         RETURNING *
-      `, values);
+      `,
+        values
+      );
 
       if (result.rows.length === 0) {
-        throw new Error('Calendar not found or access denied');
+        throw new Error("Calendar not found or access denied");
       }
 
       return result.rows[0];
     } catch (error) {
-      logger.error('Error updating calendar:', error);
-      throw new Error('Failed to update calendar');
+      logger.error("Error updating calendar:", error);
+      throw new Error("Failed to update calendar");
     }
   }
 
@@ -137,22 +153,27 @@ export class CalDAVService {
       );
 
       if (result.rowCount === 0) {
-        throw new Error('Calendar not found, access denied, or cannot delete default calendar');
+        throw new Error(
+          "Calendar not found, access denied, or cannot delete default calendar"
+        );
       }
     } catch (error) {
-      logger.error('Error deleting calendar:', error);
-      throw new Error('Failed to delete calendar');
+      logger.error("Error deleting calendar:", error);
+      throw new Error("Failed to delete calendar");
     }
   }
 
   // Calendar Object Operations
 
-  async getCalendarObjects(calendarId: string, userId: number): Promise<CalendarObject[]> {
+  async getCalendarObjects(
+    calendarId: string,
+    userId: number
+  ): Promise<CalendarObject[]> {
     try {
       // Verify user has access to calendar
       const calendar = await this.getCalendar(calendarId, userId);
       if (!calendar) {
-        throw new Error('Calendar not found or access denied');
+        throw new Error("Calendar not found or access denied");
       }
 
       const result = await this.db.query(
@@ -161,17 +182,21 @@ export class CalDAVService {
       );
       return result.rows;
     } catch (error) {
-      logger.error('Error fetching calendar objects:', error);
-      throw new Error('Failed to fetch calendar objects');
+      logger.error("Error fetching calendar objects:", error);
+      throw new Error("Failed to fetch calendar objects");
     }
   }
 
-  async getCalendarObject(calendarId: string, objectId: string, userId: number): Promise<CalendarObject | null> {
+  async getCalendarObject(
+    calendarId: string,
+    objectId: string,
+    userId: number
+  ): Promise<CalendarObject | null> {
     try {
       // Verify user has access to calendar
       const calendar = await this.getCalendar(calendarId, userId);
       if (!calendar) {
-        throw new Error('Calendar not found or access denied');
+        throw new Error("Calendar not found or access denied");
       }
 
       const result = await this.db.query(
@@ -180,100 +205,119 @@ export class CalDAVService {
       );
       return result.rows[0] || null;
     } catch (error) {
-      logger.error('Error fetching calendar object:', error);
-      throw new Error('Failed to fetch calendar object');
+      logger.error("Error fetching calendar object:", error);
+      throw new Error("Failed to fetch calendar object");
     }
   }
 
-  async createCalendarObject(calendarId: string, userId: number, icalendarData: string): Promise<CalendarObject> {
+  async createCalendarObject(
+    calendarId: string,
+    userId: number,
+    icalendarData: string
+  ): Promise<CalendarObject> {
     try {
       // Verify user has access to calendar
       const calendar = await this.getCalendar(calendarId, userId);
       if (!calendar) {
-        throw new Error('Calendar not found or access denied');
+        throw new Error("Calendar not found or access denied");
       }
 
       // Parse iCalendar data
       const parsed = this.parseICalendarData(icalendarData);
       const objectId = uuidv4();
 
-      const result = await this.db.query(`
+      const result = await this.db.query(
+        `
         INSERT INTO calendar_objects (
           id, calendar_id, uid, etag, icalendar_data, component_type, 
           summary, dtstart, dtend, sequence, status
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
-      `, [
-        objectId,
-        calendarId,
-        parsed.uid,
-        uuidv4(), // ETag
-        icalendarData,
-        parsed.componentType,
-        parsed.summary,
-        parsed.dtstart,
-        parsed.dtend,
-        parsed.sequence || 0,
-        parsed.status || 'CONFIRMED'
-      ]);
+      `,
+        [
+          objectId,
+          calendarId,
+          parsed.uid,
+          uuidv4(), // ETag
+          icalendarData,
+          parsed.componentType,
+          parsed.summary,
+          parsed.dtstart,
+          parsed.dtend,
+          parsed.sequence || 0,
+          parsed.status || "CONFIRMED",
+        ]
+      );
 
       return result.rows[0];
     } catch (error) {
-      logger.error('Error creating calendar object:', error);
-      throw new Error('Failed to create calendar object');
+      logger.error("Error creating calendar object:", error);
+      throw new Error("Failed to create calendar object");
     }
   }
 
-  async updateCalendarObject(calendarId: string, objectId: string, userId: number, icalendarData: string): Promise<CalendarObject> {
+  async updateCalendarObject(
+    calendarId: string,
+    objectId: string,
+    userId: number,
+    icalendarData: string
+  ): Promise<CalendarObject> {
     try {
       // Verify user has access to calendar
       const calendar = await this.getCalendar(calendarId, userId);
       if (!calendar) {
-        throw new Error('Calendar not found or access denied');
+        throw new Error("Calendar not found or access denied");
       }
 
       // Parse iCalendar data
       const parsed = this.parseICalendarData(icalendarData);
 
-      const result = await this.db.query(`
+      const result = await this.db.query(
+        `
         UPDATE calendar_objects 
         SET uid = $3, etag = $4, icalendar_data = $5, component_type = $6,
             summary = $7, dtstart = $8, dtend = $9, sequence = $10, status = $11,
             updated_at = CURRENT_TIMESTAMP
         WHERE calendar_id = $1 AND id = $2
         RETURNING *
-      `, [
-        calendarId,
-        objectId,
-        parsed.uid,
-        uuidv4(), // New ETag
-        icalendarData,
-        parsed.componentType,
-        parsed.summary,
-        parsed.dtstart,
-        parsed.dtend,
-        parsed.sequence || 0,
-        parsed.status || 'CONFIRMED'
-      ]);
+      `,
+        [
+          calendarId,
+          objectId,
+          parsed.uid,
+          uuidv4(), // New ETag
+          icalendarData,
+          parsed.componentType,
+          parsed.summary,
+          parsed.dtstart,
+          parsed.dtend,
+          parsed.sequence || 0,
+          parsed.status || "CONFIRMED",
+        ]
+      );
 
       if (result.rows.length === 0) {
-        throw new Error('Calendar object not found');
+        throw new Error("Calendar object not found");
       }
 
       return result.rows[0];
     } catch (error) {
-      logger.error('Error updating calendar object:', error);
-      throw new Error('Failed to update calendar object');
+      logger.error("Error updating calendar object:", error);
+      throw new Error("Failed to update calendar object");
     }
   }
 
-  async deleteCalendarObject(calendarId: string, objectId: string, userId: number): Promise<void> {
+  async deleteCalendarObject(
+    calendarId: string,
+    objectId: string,
+    userId: number
+  ): Promise<void> {
     try {
       // Verify user has access to calendar
       const calendar = await this.getCalendar(calendarId, userId);
       if (!calendar) {
-        throw new Error('Calendar not found or access denied');
+        throw new Error("Calendar not found or access denied");
       }
 
       const result = await this.db.query(
@@ -282,22 +326,25 @@ export class CalDAVService {
       );
 
       if (result.rowCount === 0) {
-        throw new Error('Calendar object not found');
+        throw new Error("Calendar object not found");
       }
     } catch (error) {
-      logger.error('Error deleting calendar object:', error);
-      throw new Error('Failed to delete calendar object');
+      logger.error("Error deleting calendar object:", error);
+      throw new Error("Failed to delete calendar object");
     }
   }
 
   // Calendar Query Operations
 
-  async queryCalendarObjects(query: CalendarQuery, userId: number): Promise<CalendarObject[]> {
+  async queryCalendarObjects(
+    query: CalendarQuery,
+    userId: number
+  ): Promise<CalendarObject[]> {
     try {
       // Verify user has access to calendar
       const calendar = await this.getCalendar(query.calendarId, userId);
       if (!calendar) {
-        throw new Error('Calendar not found or access denied');
+        throw new Error("Calendar not found or access denied");
       }
 
       let sql = `SELECT * FROM calendar_objects WHERE calendar_id = $1`;
@@ -316,16 +363,16 @@ export class CalDAVService {
 
       if (query.filters && query.filters.length > 0) {
         for (const filter of query.filters) {
-          switch (filter.operator || 'equals') {
-            case 'equals':
+          switch (filter.operator || "equals") {
+            case "equals":
               sql += ` AND ${filter.name} = $${paramCount++}`;
               params.push(filter.value);
               break;
-            case 'contains':
+            case "contains":
               sql += ` AND ${filter.name} ILIKE $${paramCount++}`;
               params.push(`%${filter.value}%`);
               break;
-            case 'starts-with':
+            case "starts-with":
               sql += ` AND ${filter.name} ILIKE $${paramCount++}`;
               params.push(`${filter.value}%`);
               break;
@@ -338,8 +385,8 @@ export class CalDAVService {
       const result = await this.db.query(sql, params);
       return result.rows;
     } catch (error) {
-      logger.error('Error querying calendar objects:', error);
-      throw new Error('Failed to query calendar objects');
+      logger.error("Error querying calendar objects:", error);
+      throw new Error("Failed to query calendar objects");
     }
   }
 
@@ -349,24 +396,29 @@ export class CalDAVService {
     try {
       const calendar = await this.getCalendar(calendarId, userId);
       if (!calendar) {
-        throw new Error('Calendar not found or access denied');
+        throw new Error("Calendar not found or access denied");
       }
       return calendar.syncToken;
     } catch (error) {
-      logger.error('Error getting sync token:', error);
-      throw new Error('Failed to get sync token');
+      logger.error("Error getting sync token:", error);
+      throw new Error("Failed to get sync token");
     }
   }
 
-  async getChangesSince(calendarId: string, syncToken: string, userId: number): Promise<SyncChange[]> {
+  async getChangesSince(
+    calendarId: string,
+    syncToken: string,
+    userId: number
+  ): Promise<SyncChange[]> {
     try {
       // Verify user has access to calendar
       const calendar = await this.getCalendar(calendarId, userId);
       if (!calendar) {
-        throw new Error('Calendar not found or access denied');
+        throw new Error("Calendar not found or access denied");
       }
 
-      const result = await this.db.query(`
+      const result = await this.db.query(
+        `
         SELECT sc.*, co.uid, co.icalendar_data
         FROM sync_changes sc
         LEFT JOIN calendar_objects co ON sc.object_id = co.id
@@ -377,18 +429,24 @@ export class CalDAVService {
           LIMIT 1
         )
         ORDER BY sc.created_at ASC
-      `, [calendarId, syncToken]);
+      `,
+        [calendarId, syncToken]
+      );
 
       return result.rows;
     } catch (error) {
-      logger.error('Error getting changes since sync token:', error);
-      throw new Error('Failed to get changes');
+      logger.error("Error getting changes since sync token:", error);
+      throw new Error("Failed to get changes");
     }
   }
 
   // WebDAV Property Operations
 
-  async getProperty(resourcePath: string, namespace: string, name: string): Promise<WebDAVProperty | null> {
+  async getProperty(
+    resourcePath: string,
+    namespace: string,
+    name: string
+  ): Promise<WebDAVProperty | null> {
     try {
       const result = await this.db.query(
         `SELECT * FROM webdav_properties WHERE resource_path = $1 AND namespace = $2 AND name = $3`,
@@ -396,34 +454,46 @@ export class CalDAVService {
       );
       return result.rows[0] || null;
     } catch (error) {
-      logger.error('Error getting WebDAV property:', error);
-      throw new Error('Failed to get property');
+      logger.error("Error getting WebDAV property:", error);
+      throw new Error("Failed to get property");
     }
   }
 
-  async setProperty(resourcePath: string, namespace: string, name: string, value?: string): Promise<void> {
+  async setProperty(
+    resourcePath: string,
+    namespace: string,
+    name: string,
+    value?: string
+  ): Promise<void> {
     try {
-      await this.db.query(`
+      await this.db.query(
+        `
         INSERT INTO webdav_properties (id, resource_path, namespace, name, value)
         VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (resource_path, namespace, name) 
         DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
-      `, [uuidv4(), resourcePath, namespace, name, value]);
+      `,
+        [uuidv4(), resourcePath, namespace, name, value]
+      );
     } catch (error) {
-      logger.error('Error setting WebDAV property:', error);
-      throw new Error('Failed to set property');
+      logger.error("Error setting WebDAV property:", error);
+      throw new Error("Failed to set property");
     }
   }
 
-  async removeProperty(resourcePath: string, namespace: string, name: string): Promise<void> {
+  async removeProperty(
+    resourcePath: string,
+    namespace: string,
+    name: string
+  ): Promise<void> {
     try {
       await this.db.query(
         `DELETE FROM webdav_properties WHERE resource_path = $1 AND namespace = $2 AND name = $3`,
         [resourcePath, namespace, name]
       );
     } catch (error) {
-      logger.error('Error removing WebDAV property:', error);
-      throw new Error('Failed to remove property');
+      logger.error("Error removing WebDAV property:", error);
+      throw new Error("Failed to remove property");
     }
   }
 
@@ -431,93 +501,118 @@ export class CalDAVService {
 
   private parseICalendarData(icalendarData: string): any {
     try {
-      const parsed = parseICS(icalendarData);
-      const events = Object.values(parsed).filter((item: any) => item.type === 'VEVENT');
-      
+      const parsed = parse(icalendarData);
+      const events = Object.values(parsed).filter(
+        (item: any) => item.type === "VEVENT"
+      );
+
       if (events.length === 0) {
-        throw new Error('No VEVENT found in iCalendar data');
+        throw new Error("No VEVENT found in iCalendar data");
       }
 
       const event = events[0] as any;
-      
+
       return {
         uid: event.uid || uuidv4(),
-        componentType: 'VEVENT',
+        componentType: "VEVENT",
         summary: event.summary,
         dtstart: event.start ? new Date(event.start) : null,
         dtend: event.end ? new Date(event.end) : null,
         sequence: event.sequence || 0,
-        status: event.status || 'CONFIRMED'
+        status: event.status || "CONFIRMED",
       };
     } catch (error) {
-      logger.error('Error parsing iCalendar data:', error);
-      throw new Error('Invalid iCalendar data');
+      logger.error("Error parsing iCalendar data:", error);
+      throw new Error("Invalid iCalendar data");
     }
   }
 
-  async generateICalendarFeed(calendarId: string, userId: number): Promise<string> {
+  async generateICalendarFeed(
+    calendarId: string,
+    userId: number
+  ): Promise<string> {
     try {
       const calendar = await this.getCalendar(calendarId, userId);
       if (!calendar) {
-        throw new Error('Calendar not found or access denied');
+        throw new Error("Calendar not found or access denied");
       }
 
       const objects = await this.getCalendarObjects(calendarId, userId);
-      
+
       const cal = ical({
-        domain: 'vibecal.local',
+        domain: "vibecal.local",
         name: calendar.displayName,
         description: calendar.description,
         timezone: calendar.timezone,
         prodId: {
-          company: 'VibeCal',
-          product: 'VibeCal Calendar',
-          language: 'EN'
-        }
+          company: "VibeCal",
+          product: "VibeCal Calendar",
+          language: "EN",
+        },
       });
 
       for (const obj of objects) {
-        if (obj.componentType === 'VEVENT') {
+        if (obj.componentType === "VEVENT") {
           try {
             cal.createEvent({
               uid: obj.uid,
               start: obj.dtstart || new Date(),
               end: obj.dtend || new Date(),
-              summary: obj.summary || 'No Title',
+              summary: obj.summary || "No Title",
               timestamp: obj.dtstamp,
               sequence: obj.sequence,
-              status: obj.status.toLowerCase() as any
+              status: obj.status.toLowerCase() as any,
             });
           } catch (eventError) {
-            logger.warn('Error adding event to calendar feed:', eventError);
+            logger.warn("Error adding event to calendar feed:", eventError);
           }
         }
       }
 
       return cal.toString();
     } catch (error) {
-      logger.error('Error generating iCalendar feed:', error);
-      throw new Error('Failed to generate calendar feed');
+      logger.error("Error generating iCalendar feed:", error);
+      throw new Error("Failed to generate calendar feed");
     }
   }
 
   // Lock Management
 
-  async createLock(resourcePath: string, lockType: 'read' | 'write', lockScope: 'shared' | 'exclusive', depth: '0' | '1' | 'infinity', timeoutSeconds: number = 3600, ownerInfo?: string): Promise<WebDAVLock> {
+  async createLock(
+    resourcePath: string,
+    lockType: "read" | "write",
+    lockScope: "shared" | "exclusive",
+    depth: "0" | "1" | "infinity",
+    timeoutSeconds: number = 3600,
+    ownerInfo?: string
+  ): Promise<WebDAVLock> {
     try {
       const lockToken = `opaquelocktoken:${uuidv4()}`;
       const expiresAt = new Date(Date.now() + timeoutSeconds * 1000);
 
-      const result = await this.db.query(`
+      const result = await this.db.query(
+        `
         INSERT INTO webdav_locks (id, resource_path, lock_token, lock_type, lock_scope, depth, owner_info, timeout_seconds, expires_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *
-      `, [uuidv4(), resourcePath, lockToken, lockType, lockScope, depth, ownerInfo, timeoutSeconds, expiresAt]);
+      `,
+        [
+          uuidv4(),
+          resourcePath,
+          lockToken,
+          lockType,
+          lockScope,
+          depth,
+          ownerInfo,
+          timeoutSeconds,
+          expiresAt,
+        ]
+      );
 
       return result.rows[0];
     } catch (error) {
-      logger.error('Error creating WebDAV lock:', error);
-      throw new Error('Failed to create lock');
+      logger.error("Error creating WebDAV lock:", error);
+      throw new Error("Failed to create lock");
     }
   }
 
@@ -529,20 +624,19 @@ export class CalDAVService {
       );
       return result.rows[0] || null;
     } catch (error) {
-      logger.error('Error getting WebDAV lock:', error);
-      throw new Error('Failed to get lock');
+      logger.error("Error getting WebDAV lock:", error);
+      throw new Error("Failed to get lock");
     }
   }
 
   async removeLock(lockToken: string): Promise<void> {
     try {
-      await this.db.query(
-        `DELETE FROM webdav_locks WHERE lock_token = $1`,
-        [lockToken]
-      );
+      await this.db.query(`DELETE FROM webdav_locks WHERE lock_token = $1`, [
+        lockToken,
+      ]);
     } catch (error) {
-      logger.error('Error removing WebDAV lock:', error);
-      throw new Error('Failed to remove lock');
+      logger.error("Error removing WebDAV lock:", error);
+      throw new Error("Failed to remove lock");
     }
   }
 
@@ -553,7 +647,7 @@ export class CalDAVService {
       );
       return result.rowCount || 0;
     } catch (error) {
-      logger.error('Error cleaning up expired locks:', error);
+      logger.error("Error cleaning up expired locks:", error);
       return 0;
     }
   }

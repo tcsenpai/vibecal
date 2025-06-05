@@ -5,31 +5,154 @@
 @layer base {
   html {
     font-family: Inter, system-ui, sans-serif;
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply transition-colors duration-200;
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100 dark:bg-gray-800;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400 dark:bg-gray-500;
   }
 }
 
 @layer components {
+  /* Enhanced Button Components */
   .btn {
-    @apply px-4 py-2 rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors;
+    @apply px-4 py-2.5 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-soft;
   }
   
   .btn-primary {
-    @apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500 dark:bg-primary-500 dark:hover:bg-primary-600;
+    @apply bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700 focus:ring-primary-400 shadow-primary-500/25 hover:shadow-primary-500/40 dark:from-primary-400 dark:to-primary-500 dark:hover:from-primary-500 dark:hover:to-primary-600;
   }
   
   .btn-secondary {
-    @apply bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600;
+    @apply bg-white/80 backdrop-blur-sm text-gray-700 hover:bg-white border border-gray-200 hover:border-gray-300 focus:ring-primary-400 dark:bg-gray-800/80 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700/80 dark:hover:border-gray-600;
+  }
+  
+  .btn-success {
+    @apply bg-gradient-to-r from-success-500 to-success-600 text-white hover:from-success-600 hover:to-success-700 focus:ring-success-400 shadow-success-500/25 hover:shadow-success-500/40;
+  }
+  
+  .btn-warning {
+    @apply bg-gradient-to-r from-warning-500 to-warning-600 text-white hover:from-warning-600 hover:to-warning-700 focus:ring-warning-400 shadow-warning-500/25 hover:shadow-warning-500/40;
   }
   
   .btn-danger {
-    @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600;
+    @apply bg-gradient-to-r from-error-500 to-error-600 text-white hover:from-error-600 hover:to-error-700 focus:ring-error-400 shadow-error-500/25 hover:shadow-error-500/40;
   }
   
+  .btn-ghost {
+    @apply text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:ring-gray-400 dark:text-gray-400 dark:hover:text-gray-100 dark:hover:bg-gray-800/60;
+  }
+  
+  .btn-icon {
+    @apply p-2 rounded-lg;
+  }
+  
+  /* Enhanced Input Components */
   .input {
-    @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-primary-400;
+    @apply block w-full px-4 py-3 border border-gray-200 rounded-xl shadow-soft placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-primary-400 transition-all duration-200 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-primary-400 backdrop-blur-sm;
   }
   
+  .input-error {
+    @apply border-error-300 focus:border-error-400 focus:ring-error-400 dark:border-error-600;
+  }
+  
+  /* Enhanced Card Components */
   .card {
-    @apply bg-white rounded-lg shadow-md border border-gray-200 dark:bg-gray-800 dark:border-gray-700;
+    @apply bg-white/80 backdrop-blur-sm rounded-2xl shadow-soft border border-gray-200/60 dark:bg-gray-800/80 dark:border-gray-700/60 transition-all duration-200 hover:shadow-soft-lg;
+  }
+  
+  .card-elevated {
+    @apply shadow-soft-lg hover:shadow-glow transform hover:-translate-y-1 transition-all duration-300;
+  }
+  
+  .card-glass {
+    @apply bg-white/10 backdrop-blur-md border border-white/20 dark:bg-gray-900/10 dark:border-gray-700/20;
+  }
+  
+  /* Modal and Overlay Components */
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/50 backdrop-blur-sm;
+  }
+  
+  .modal-content {
+    @apply bg-white/95 backdrop-blur-lg rounded-2xl shadow-soft-lg border border-gray-200/60 dark:bg-gray-800/95 dark:border-gray-700/60;
+  }
+  
+  /* Navigation Components */
+  .nav-item {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800/60;
+  }
+  
+  .nav-item-active {
+    @apply bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300;
+  }
+  
+  /* Loading and Animation Components */
+  .loading-shimmer {
+    @apply bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700;
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  
+  .pulse-ring {
+    @apply absolute inset-0 rounded-full bg-primary-400 opacity-75 animate-ping;
+  }
+  
+  /* Utility Classes */
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent;
+  }
+  
+  .border-gradient {
+    background: linear-gradient(white, white) padding-box,
+                linear-gradient(135deg, #0ea5e9, #d946ef) border-box;
+    border: 2px solid transparent;
+  }
+  
+  .glass-effect {
+    @apply bg-white/10 backdrop-blur-md border border-white/20;
+  }
+  
+  /* Calendar Specific */
+  .calendar-event {
+    @apply rounded-lg px-2 py-1 text-sm font-medium transition-all duration-200 hover:scale-105 cursor-pointer;
+  }
+  
+  .calendar-day {
+    @apply hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors duration-200 rounded-lg;
+  }
+  
+  /* Status Indicators */
+  .status-dot {
+    @apply inline-block w-2 h-2 rounded-full;
+  }
+  
+  .status-online {
+    @apply bg-success-500 shadow-glow;
+  }
+  
+  .status-offline {
+    @apply bg-gray-400;
+  }
+  
+  .status-away {
+    @apply bg-warning-500;
   }
 }
