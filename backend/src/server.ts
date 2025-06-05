@@ -6,20 +6,18 @@ import dotenv from "dotenv";
 import { Server } from "socket.io";
 import http from "http";
 import { v4 as uuidv4 } from "uuid";
-// import { v2 as webdav } from "webdav-server";  // Temporarily disabled
-// import { CalDAVFileSystem } from "./services/webdavFileSystem";  // Temporarily disabled
-// import { createCalDAVRoutes } from "./routes/caldav";  // Temporarily disabled
+import { createWebCalRoutes } from "./routes/webcal";
 
 import authRoutes from "./routes/auth";
 import eventsRoutes from "./routes/events";
 import healthRoutes from "./routes/health";
+import adminRoutes from "./routes/admin";
 
 import {
-  globalErrorHandler,
-  notFoundHandler,
   unhandledRejectionHandler,
   uncaughtExceptionHandler,
 } from "./middleware/errorHandler";
+import { errorHandler, notFoundHandler } from "./utils/errorHandler";
 import { sanitizeInput } from "./middleware/validation";
 import { logger, requestLogger, logSecurityEvent } from "./utils/logger";
 import { checkDatabaseHealth, closeDatabaseConnection } from "./utils/database";
@@ -140,65 +138,19 @@ app.use(sanitizeInput);
 // Routes with specific rate limiting
 app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/events", eventsRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/", healthRoutes);
 
-// Initialize WebDAV server (temporarily disabled due to type conflicts)
-// TODO: Fix WebDAV server integration in future update
-const ENABLE_WEBDAV = process.env.ENABLE_WEBDAV === "true";
-
-if (ENABLE_WEBDAV) {
-  try {
-    logger.info("WebDAV server is disabled. Enable with ENABLE_WEBDAV=true");
-    // WebDAV initialization code commented out for now
-    /*
-    webdavServer = new webdav.WebDAVServer({
-      httpAuthentication: new webdav.HTTPBasicAuthentication(
-        "VibeCal",
-        async (username, password, callback) => {
-          try {
-            callback(null, { username });
-          } catch (error) {
-            callback(error);
-          }
-        }
-      ),
-      privilegeManager: new webdav.SimplePathPrivilegeManager(),
-      maxRequestDepth: 1,
-      headers: {
-        DAV: "1, 2, 3, calendar-access, calendar-schedule, calendar-proxy",
-        Allow:
-          "OPTIONS, GET, HEAD, POST, PUT, DELETE, PROPFIND, PROPPATCH, MKCOL, COPY, MOVE, REPORT",
-      },
-    });
-
-    webdavFS = new CalDAVFileSystem(database);
-    webdavServer.setFileSystem("/", webdavFS, (success) => {
-      if (!success) {
-        logger.error("Failed to set WebDAV filesystem");
-      } else {
-        logger.info("WebDAV filesystem initialized successfully");
-      }
-    });
-
-    app.use("/caldav", (req, res) => {
-      webdavServer.executeRequest(req, res);
-    });
-    */
-  } catch (error) {
-    logger.error("Failed to initialize CalDAV/WebDAV server:", error);
-  }
-}
-
-// Add CalDAV REST API routes (these work fine)
-// TODO: Re-enable when CalDAV implementation is fixed
-/*
+// WebCal routes
 try {
-  app.use(createCalDAVRoutes(database));
-  logger.info("CalDAV REST API routes initialized successfully");
+  app.use(createWebCalRoutes(database));
+  logger.info("WebCal routes initialized successfully");
 } catch (error) {
-  logger.error("Failed to initialize CalDAV REST API routes:", error);
+  logger.error("Failed to initialize WebCal routes:", error);
 }
-*/
+
+// WebDAV support disabled pending full implementation
+// To enable, implement CalDAV routes and uncomment
 
 // Socket.io for real-time updates with enhanced error handling
 io.on("connection", (socket) => {
@@ -236,7 +188,7 @@ io.on("connection", (socket) => {
 app.use("*", notFoundHandler);
 
 // Global error handler (must be last)
-app.use(globalErrorHandler);
+app.use(errorHandler);
 
 // Graceful shutdown handling
 const gracefulShutdown = async (signal: string) => {
@@ -292,4 +244,4 @@ const startServer = async () => {
 
 startServer();
 
-export { io };
+export { app, io };

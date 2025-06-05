@@ -75,46 +75,61 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="px-4 sm:px-6 lg:px-8 py-4">
+    <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+      {/* Modern Header */}
+      <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-700/60 shadow-soft">
+        <div className="px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">VibeCal</h1>
-              <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">Calendar</span>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl flex items-center justify-center shadow-glow">
+                  <span className="text-white font-bold text-lg">V</span>
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-gradient">VibeCal</h1>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Your intelligent calendar</p>
+                </div>
+              </div>
             </div>
             
             <div className="flex items-center space-x-4">
               <button
                 onClick={handleCreateEvent}
-                className="btn btn-primary flex items-center"
+                className="btn btn-primary flex items-center space-x-2 shadow-primary-500/25 hover:shadow-primary-500/40"
               >
-                <PlusIcon className="h-5 w-5 mr-2" />
-                New Event
+                <PlusIcon className="h-5 w-5" />
+                <span className="hidden sm:inline">Create Event</span>
               </button>
               
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  {user?.firstName || user?.username}
-                </span>
-                <ThemeToggle />
-                <button
-                  onClick={handleLogout}
-                  className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-                  title="Sign out"
-                >
-                  <ArrowRightOnRectangleIcon className="h-5 w-5" />
-                </button>
+              <div className="flex items-center space-x-3">
+                <div className="text-right hidden sm:block">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {user?.firstName || user?.username}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {user?.email}
+                  </p>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <ThemeToggle />
+                  <button
+                    onClick={handleLogout}
+                    className="btn btn-ghost btn-icon"
+                    title="Sign out"
+                  >
+                    <ArrowRightOnRectangleIcon className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="flex-1 p-4 sm:p-6 lg:p-8">
-        <div className="h-full card p-6">
+      {/* Enhanced Main Content */}
+      <main className="flex-1 p-6 lg:p-8 overflow-hidden">
+        <div className="h-full card-glass p-8 shadow-soft-lg">
           <Calendar
             onSelectEvent={setSelectedEvent}
             onSelectSlot={handleSelectSlot}

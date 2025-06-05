@@ -112,6 +112,7 @@ module.exports = {
         'slide-in-up': 'slideInUp 0.3s ease-out',
         'slide-in-down': 'slideInDown 0.3s ease-out',
         'scale-in': 'scaleIn 0.2s ease-out',
+        'context-menu-in': 'contextMenuIn 0.15s ease-out',
         'pulse-soft': 'pulseSoft 2s infinite',
         'bounce-gentle': 'bounceGentle 2s infinite',
         'shimmer': 'shimmer 2s linear infinite',
@@ -132,6 +133,10 @@ module.exports = {
         scaleIn: {
           '0%': { transform: 'scale(0.95)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        contextMenuIn: {
+          '0%': { transform: 'scale(0.9) translateY(-5px)', opacity: '0' },
+          '100%': { transform: 'scale(1) translateY(0)', opacity: '1' },
         },
         pulseSoft: {
           '0%, 100%': { opacity: '1' },

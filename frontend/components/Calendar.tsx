@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import { Calendar as BigCalendar, momentLocalizer, View, Views } from 'react-big-calendar'
 import moment from 'moment'
 import { useQuery } from '@tanstack/react-query'
+import { Vote } from 'lucide-react'
 import { eventsApi } from '@/lib/api'
 import { Event } from '@/types'
 import ContextMenu from './ContextMenu'
@@ -50,24 +51,28 @@ export default function Calendar({
     slotInfo: null,
   })
 
-  const { data: events, isLoading } = useQuery({
+  const { data: events, isLoading, error } = useQuery({
     queryKey: ['events', date, view],
     queryFn: () => {
       const start = moment(date).startOf(view as moment.unitOfTime.StartOf).toISOString()
       const end = moment(date).endOf(view as moment.unitOfTime.StartOf).toISOString()
       return eventsApi.getEvents({ start, end })
     },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
   })
 
-  const calendarEvents: CalendarEvent[] = (events?.data || [])
-    .filter((event: Event) => event.startTime && event.endTime)
-    .map((event: Event) => ({
-      id: event.id,
-      title: event.title,
-      start: new Date(event.startTime!),
-      end: new Date(event.endTime!),
-      resource: event,
-    }))
+  const calendarEvents: CalendarEvent[] = useMemo(() => {
+    return (events?.data || [])
+      .filter((event: Event) => event.startTime && event.endTime)
+      .map((event: Event) => ({
+        id: event.id,
+        title: event.title,
+        start: new Date(event.startTime!),
+        end: new Date(event.endTime!),
+        resource: event,
+      }))
+  }, [events?.data])
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
     onSelectEvent?.(event.resource)
@@ -113,25 +118,59 @@ export default function Calendar({
     }
   }, [onSelectSlot, onCreateVotingEvent, onSelectEvent, onEditEvent, onDeleteEvent])
 
-  const eventStyleGetter = (event: CalendarEvent) => {
+  const eventStyleGetter = useCallback((event: CalendarEvent) => {
     const isVotingEvent = event.resource.eventType === 'voting'
     
     return {
       style: {
         backgroundColor: isVotingEvent ? '#f59e0b' : '#3b82f6',
-        borderRadius: '4px',
-        opacity: 0.8,
+        borderRadius: '12px',
+        opacity: 0.9,
         color: 'white',
-        border: '0px',
+        border: 'none',
         display: 'block',
+        fontWeight: '600',
+        fontSize: '13px',
+        padding: '4px 8px',
+        boxShadow: isVotingEvent 
+          ? '0 4px 12px rgba(245, 158, 11, 0.3)' 
+          : '0 4px 12px rgba(59, 130, 246, 0.3)',
+        backdropFilter: 'blur(8px)',
+        transition: 'all 0.2s ease',
       },
     }
-  }
+  }, [])
 
   if (isLoading) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      <div className="h-full flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 rounded-2xl">
+        <div className="text-center space-y-4">
+          <div className="relative">
+            <div className="w-12 h-12 border-4 border-primary-200 dark:border-primary-800 rounded-full animate-spin border-t-primary-600 dark:border-t-primary-400"></div>
+            <div className="absolute inset-0 w-12 h-12 border-4 border-transparent rounded-full animate-ping border-t-primary-400 opacity-20"></div>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 font-medium">Loading your calendar...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="h-full flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 rounded-2xl">
+        <div className="text-center space-y-4 max-w-md">
+          <div className="text-error-500 text-5xl">⚠️</div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Failed to load calendar</h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            There was an error loading your events. Please try refreshing the page.
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="btn btn-primary"
+          >
+            Refresh Page
+          </button>
+        </div>
       </div>
     )
   }
@@ -189,9 +228,28 @@ export default function Calendar({
                 e.preventDefault()
                 handleRightClick(e, undefined, event.resource)
               }}
-              className="cursor-pointer h-full w-full"
+              className="cursor-pointer h-full w-full group relative overflow-hidden"
             >
-              {event.title}
+              <div className="flex items-center h-full space-x-2">
+                <div className={`w-2 h-2 rounded-full ${
+                  event.resource.eventType === 'voting' 
+                    ? 'bg-yellow-200' 
+                    : 'bg-blue-200'
+                } opacity-80`} />
+                <span className="font-semibold text-white truncate flex-1">
+                  {event.title}
+                </span>
+              </div>
+              
+              {/* Hover effect overlay */}
+              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg" />
+              
+              {/* Voting indicator */}
+              {event.resource.eventType === 'voting' && (
+                <div className="absolute top-1 right-1">
+                  <Vote className="w-3 h-3 text-yellow-200" />
+                </div>
+              )}
             </div>
           ),
         }}

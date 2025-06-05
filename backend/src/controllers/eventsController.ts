@@ -5,6 +5,8 @@ import { AuthRequest } from '../middleware/auth';
 import { CreateEventRequest, VotingTimeSlot } from '../types';
 import { generateGuestToken } from '../utils/auth';
 import { io } from '../server';
+import { AppError, asyncHandler } from '../utils/errorHandler';
+import { logger } from '../utils/logger';
 
 export const createEventValidation = [
   body('title').isLength({ min: 1, max: 255 }),
@@ -18,36 +20,41 @@ export const createEventValidation = [
   body('maxParticipants').optional().isInt({ min: 1 }),
 ];
 
-export const createEvent = async (req: AuthRequest, res: Response) => {
+export const createEvent = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, true, 'VALIDATION_ERROR');
+  }
+
+  if (!req.user) {
+    throw new AppError('Authentication required', 401, true, 'AUTH_REQUIRED');
+  }
+
+  const userId = req.user.userId;
+  const eventData: CreateEventRequest = req.body;
+
+  const client = await pool.connect();
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+    await client.query('BEGIN');
 
-    const userId = req.user!.userId;
-    const eventData: CreateEventRequest = req.body;
+    logger.info('Creating event', { userId, title: eventData.title, eventType: eventData.eventType });
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      // Create the event
-      const eventResult = await client.query(
-        `INSERT INTO events (title, description, creator_id, start_time, end_time, location, 
-         is_all_day, is_recurring, recurrence_rule, event_type, is_public, max_participants)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-         RETURNING *`,
-        [
-          eventData.title,
-          eventData.description,
-          userId,
-          eventData.startTime || null,
-          eventData.endTime || null,
-          eventData.location,
-          eventData.isAllDay || false,
-          eventData.isRecurring || false,
-          eventData.recurrenceRule,
+    // Create the event
+    const eventResult = await client.query(
+      `INSERT INTO events (title, description, creator_id, start_time, end_time, location, 
+       is_all_day, is_recurring, recurrence_rule, event_type, is_public, max_participants)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING *`,
+      [
+        eventData.title,
+        eventData.description,
+        userId,
+        eventData.startTime || null,
+        eventData.endTime || null,
+        eventData.location,
+        eventData.isAllDay || false,
+        eventData.isRecurring || false,
+        eventData.recurrenceRule,
           eventData.eventType,
           eventData.isPublic || false,
           eventData.maxParticipants,
@@ -111,22 +118,21 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
         isPublic: event.is_public,
         createdAt: event.created_at,
       });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
   } catch (error) {
-    console.error('Create event error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-};
+});
 
-export const getEvents = async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.user!.userId;
-    const { start, end } = req.query;
+export const getEvents = asyncHandler(async (req: AuthRequest, res: Response) => {
+  if (!req.user) {
+    throw new AppError('Authentication required', 401, true, 'AUTH_REQUIRED');
+  }
+
+  const userId = req.user.userId;
+  const { start, end } = req.query;
 
     let query = `
       SELECT e.*, u.username as creator_name,
@@ -165,12 +171,8 @@ export const getEvents = async (req: AuthRequest, res: Response) => {
       createdAt: row.created_at,
     }));
 
-    res.json(events);
-  } catch (error) {
-    console.error('Get events error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
+  res.json(events);
+});
 
 export const getEventDetails = async (req: AuthRequest, res: Response) => {
   try {
